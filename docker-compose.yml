@@ -1,0 +1,123 @@
+version: '3'
+
+services:
+  redis:
+    restart: always
+    image: redis:latest
+    ports:
+      - "6379:6379"
+
+  tfai-webhost:
+    restart: always
+    image: ${TFAI_WEBHOST_IMAGE}
+    depends_on:
+      - redis
+    ports:
+      - "8000:8000"
+    environment:
+      - ACCESSTOKENAWS=
+      - SECRETKEYAWS=
+      - BUCKETNAME=${BUCKET_NAME}
+      - DB_DIALECT=${DB_DIALECT}
+      - DB_NAME=${DB_NAME}
+      - DB_MULTI_SCHEMA=${DB_MULTI_SCHEMA}
+      - DB_SCHEMA=${DB_SCHEMA}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - CONF_LOGGING_LEVEL=debug
+      - CONF_QUEUE_AMQPURL=amqp://${RABBIT_USERNAME}:${RABBIT_PASSWORD}@${HOST_NAME_RABBIT}:5672
+      - CONF_ML_AMQPURL=amqp://${RABBIT_USERNAME}:${RABBIT_PASSWORD}@${HOST_NAME_RABBIT}:5672
+      - CONF_REDIS_HOST=${HOST_NAME_REDIS}
+      - CONF_REDIS_PORT=6379
+      - DJANGO_ALLOWED_HOST=${HOST_NAME}
+      - STORAGE=AMAZON
+      - LANGUAGE=${LANGUAGE}
+      - POST_PROCESSING=OFF
+      - UI_URL=http://${HOST_NAME}:3000/
+      - CONF_STATSD_HOST=${HOST_NAME}
+    links:
+      - redis:redis
+    depends_on:
+      - ui
+    volumes:
+      - "./files:/Techforce/tfai-webhost/webhost/files"
+
+  tfai-core:
+    restart: always
+    image: ${TFAI_CORE_IMAGE}
+    depends_on:
+      - tfai-webhost
+    ports:
+      - "5005:5005"
+    environment:
+      - ACCESSTOKENAWS=
+      - SECRETKEYAWS=
+      - BUCKETNAME=${BUCKET_NAME}
+      - DB_DIALECT=${DB_DIALECT}
+      - DB_NAME=${DB_NAME}
+      - DB_MULTI_SCHEMA=${DB_MULTI_SCHEMA}
+      - DB_SCHEMA=${DB_SCHEMA}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - CONF_LOGGING_LEVEL=debug
+      - CONF_QUEUE_AMQPURL=amqp://${RABBIT_USERNAME}:${RABBIT_PASSWORD}@${HOST_NAME_RABBIT}:5672
+      - CONF_ML_AMQPURL=amqp://${RABBIT_USERNAME}:${RABBIT_PASSWORD}@${HOST_NAME_RABBIT}:5672
+      - CONF_REDIS_HOST=${HOST_NAME_REDIS}
+      - CONF_REDIS_PORT=6379
+      - DJANGO_ALLOWED_HOST=${HOST_NAME}
+      - STORAGE=AMAZON
+      - LANGUAGE=${LANGUAGE}
+      - POST_PROCESSING=OFF
+      - UI_URL=http://${HOST_NAME}:3000/
+      - CONF_STATSD_HOST=${HOST_NAME}
+    depends_on:
+      - rabbitmq
+    volumes:
+      - "./files:/Techforce/libpytfai/libtfai/files"
+      - "./versions:/Techforce/tfai-core/alembic/migrations/versions"
+
+  ui:
+    restart: always
+    image: ${UI_IMAGE}
+    depends_on:
+      - tfai-core
+    ports:
+      - "3000:3000"
+    volumes:
+      - "./build:/Techforce/tfai-ui/build/runtime"
+
+  rabbitmq:
+    restart: always
+    image: ${RABBITMQ_IMAGE}
+    depends_on:
+      - ui
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+
+  nginx:
+    restart: always
+    image: nginx:latest
+    container_name: nginx_container
+    depends_on:
+      - redis
+      - tfai-webhost
+      - tfai-core
+      - ui
+      - rabbitmq
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ../../certs/your_cert.crt:/etc/ssl/certs/ssl-server-cert.crt
+      - ../../certs/your_cert.key:/etc/ssl/private/ssl-server-cert-key.key
+    ports:
+      - 443:443
+
+
+networks: 
+  default: 
+    external: 
+      name: ${NETWORK}
+

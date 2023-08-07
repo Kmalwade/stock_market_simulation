@@ -1,0 +1,6 @@
+fastapi
+sqlalchemy
+kafka-python
+redis
+psycopg2
+confluent-kafka
